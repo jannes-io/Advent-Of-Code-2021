@@ -5,24 +5,17 @@ interface Game {
   boards: Board[];
 }
 
+interface Result {
+  n: number;
+  board: Board;
+}
+
+interface GameResult {
+  winner: Result;
+  loser: Result;
+}
+
 const parseDec = (n: string) => parseInt(n, 10);
-
-export const parseInput = (input: string): Game => {
-  const [x, ...xs] = input.split('\n');
-
-  const numbers = x.split(',').map(parseDec);
-
-  let rows = xs.filter(Boolean).map((row) => row.split(' ').filter(Boolean).map((n) => parseDec(n.trim())));
-  let boards = [];
-  while (rows.length) {
-    boards.push(rows.splice(0, 5));
-  }
-
-  return {
-    numbers,
-    boards,
-  }
-};
 
 const markNumbers = (n: number) => (board: Board) => {
   for (let i = 0; i < board.length; i++) {
@@ -48,24 +41,66 @@ const checkGrid = (board: number[][]) => {
 
 const checkBoard = (board: Board) => checkGrid(board) || checkGrid(board[0].map((n, i) => board.map((row) => row[i])))
 
-const findWinner = (game: Game) => {
-  for (const n of game.numbers) {
-    const mark = markNumbers(n);
-    for (const board of game.boards) {
-      if (checkBoard(mark(board))) {
-        return { board, n };
-      }
+const playRound = (number: number, boards: Board[]) => {
+  let winner: Board | undefined;
+  const remaining = [];
+
+  const mark = markNumbers(number);
+  for (const board of boards) {
+    mark(board);
+    if (checkBoard(board)) {
+      winner = board;
+    } else {
+      remaining.push(board);
     }
   }
-  throw Error('No winning board found!');
+  return { winner, remaining };
 }
 
-export const executePart1 = (input: Game) => {
-  const { board, n } = findWinner(input);
+const runBingo = (game: Game) => {
+  let remaining = game.boards;
+  let winner;
+  let loser;
+
+  const numbers = game.numbers.reverse();
+  while (remaining.length !== 0) {
+    const currentNumber = numbers.pop();
+    const roundResult = playRound(currentNumber, remaining);
+
+    if (winner === undefined && roundResult.winner !== undefined) {
+      winner = { n: currentNumber, board: roundResult.winner };
+    }
+    loser = { n: currentNumber, board: roundResult.winner };
+
+    remaining = roundResult.remaining;
+  }
+  return { winner, loser };
+}
+
+const calculateResult = ({ board, n }: Result) => {
   const numbers = board.reduce((all, row) => [...all, ...row.filter((number) => number !== -1)], []);
-  const sum = numbers.reduce((acc, number) => acc + number);
+  const sum = numbers.reduce((acc, number) => acc + number, 0);
 
   return sum * n;
+}
+
+export const parseInput = (input: string): GameResult => {
+  const [x, ...xs] = input.split('\n');
+
+  const numbers = x.split(',').map(parseDec);
+
+  let rows = xs.filter(Boolean).map((row) => row.split(' ').filter(Boolean).map((n) => parseDec(n.trim())));
+  let boards = [];
+  while (rows.length) {
+    boards.push(rows.splice(0, 5));
+  }
+
+  return runBingo({
+    numbers,
+    boards,
+  });
 };
 
-export const executePart2 = (input: Game) => 0;
+export const executePart1 = (input: GameResult) => calculateResult(input.winner);
+
+export const executePart2 = (input: GameResult) => calculateResult(input.loser);
